@@ -8,18 +8,17 @@
  * Group: CLOVERS
 */
 
-#include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/version.h>
+#include <linux/module.h>
 
-int drv_init(void)
+static int __init drv_init(void)
 {
     printk(KERN_INFO "DHT11: Initializing...\n");
     
     return 0;
 }
 
-void drv_exit(void)
+static void __exit drv_exit(void)
 {
     printk(KERN_INFO "DHT11: Exiting...\n");
 }
@@ -28,5 +27,7 @@ module_init(drv_init);
 module_exit(drv_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Franco Bottini, Valentín Robledo, Aquiles Lencina");
+MODULE_AUTHOR("Bottini, Franco Nicolas");
+MODULE_AUTHOR("Robledo, Valentín");
+MODULE_AUTHOR("Lencina, Aquiles Benjamin");
 MODULE_DESCRIPTION("DHT11 Driver");

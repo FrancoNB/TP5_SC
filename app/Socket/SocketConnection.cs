@@ -1,16 +1,16 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace SocketConfig
+namespace AppSocket
 {
     public class SocketConnection
     {
-        public static Socket ConnectSocket()
+        public static Socket ConnectSocket(string ipAddressString, int port)
         {
             try
             {
-                IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
-                IPEndPoint remoteEP = new(ipAddress, 8080);
+                IPAddress ipAddress = IPAddress.Parse(ipAddressString);
+                IPEndPoint remoteEP = new(ipAddress, port);
 
                 Socket socket = new(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
@@ -41,7 +41,7 @@ namespace SocketConfig
                 Console.WriteLine(e.ToString());
             }
 
-            return null;
+            return null!;
         }
     }
 }

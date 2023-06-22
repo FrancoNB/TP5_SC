@@ -225,6 +225,12 @@ void end(void)
 
 int main(void)
 {
+    if(geteuid() != 0)
+    {
+        fprintf(stderr, KRED"Server must be run as root !\n"KDEF);
+        exit(EXIT_FAILURE);
+    }
+
     init();
 
     int *client_fd = calloc(1, sizeof(int));   

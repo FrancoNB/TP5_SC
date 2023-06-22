@@ -5,49 +5,62 @@
 
 #define SUPPORTED_DEVICES_COUNT 2
 
-#define VENDOR_ID 0x10C4
-#define PRODUCT_ID_1 0xEA60
-#define PRODUCT_ID_2 0xEA70
+#define CP210X_VENDOR_ID 0x10C4
+#define CP210X_PRODUCT_ID_1 0xEA60
+#define CP210X_PRODUCT_ID_2 0xEA70
 
-const char* result_codes_string[] = {
-    "Scan device failed",
-    "Device read failed",
-    "Device connection failed",
-    "Device unknown",
-    "Result false",
-    "Result true",
-    "Result ok",
-    "DHT11",
-    "TFMINI"
+static result_codes is_supported_device(struct usb_serial_port *port, uint8_t *tag);
+static int scann_usb_device(struct usb_device *dev, void *data);
+static int usb_device_event(struct notifier_block *nb, unsigned long action, void *data);
+static void remove_device(struct usb_serial_port *port, uint8_t tag);
+static void add_new_device(struct usb_serial_port *port, uint8_t tag);
+
+static struct notifier_block usb_device_nb = {
+    .notifier_call = usb_device_event,
 };
 
-result_codes (*support_testers[SUPPORTED_DEVICES_COUNT])(struct usb_serial_port*) = {
-    is_dht11,
-    is_tfmini
-};
-
-static result_codes is_supported_device(struct usb_serial_port *port)
+struct sensors_t
 {
-    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+    const char* name;
+    uint8_t tag;
+    struct class *device_class;
+    result_codes (*device_tester)(struct usb_serial_port*, uint8_t*);
+    struct device** (*device_adder)(struct class*, uint16_t, uint8_t*);
+    uint16_t (*device_get_new_id)(void);
+};
+
+static struct sensors_t supported_sensors[SUPPORTED_DEVICES_COUNT] = {
     {
-        result_codes result = support_testers[i](port);
-
-        if(result != RESULT_FALSE)
-            return result;
+        .name = DHT11_NAME,
+        .tag = DHT11_TAG,
+        .device_tester = device_is_dht11,
+        .device_adder = device_add_dht11,
+        .device_get_new_id = device_dht11_get_new_id
+    },
+    {
+        .name = TFMINI_NAME,
+        .tag = TFMINI_TAG,
+        .device_tester = device_is_tfmini,
+        .device_adder = device_add_tfmini,
+        .device_get_new_id = device_tfmini_get_new_id
     }
+};
 
-    return RESULT_FALSE;
-}
-
-static int detection_routine(struct usb_device *dev, void *data)
+static int scann_usb_device(struct usb_device *dev, void *data)
 {
     struct usb_interface *interface;
     struct usb_serial *serial;
     struct usb_serial_port *port;
-    result_codes result;
+    uint8_t tag;
 
-    if(dev->descriptor.idVendor != VENDOR_ID || (dev->descriptor.idProduct != PRODUCT_ID_1 && dev->descriptor.idProduct != PRODUCT_ID_2))
+    if(dev->descriptor.idVendor != CP210X_VENDOR_ID || (dev->descriptor.idProduct != CP210X_PRODUCT_ID_1 && dev->descriptor.idProduct != CP210X_PRODUCT_ID_2))
         return 0;
+
+    if(dev->actconfig == NULL)
+    {
+        pr_err("Failed to get active config: %s\n", dev->product);
+        return 0;
+    }
 
     for (int i = 0; i < dev->actconfig->desc.bNumInterfaces; i++) 
     {
@@ -77,13 +90,12 @@ static int detection_routine(struct usb_device *dev, void *data)
                 continue;
             }
 
-            result = is_supported_device(port);
-
-            if(result != RESULT_FALSE)
+            if(is_supported_device(port, &tag) == RESULT_TRUE)
             {
-                pr_info("Device detected: %s\n", result_codes_string[result + STRING_CONVERT_OFFSET]);
-
-                //device_queue_add(port, result);
+                if(!device_queue_exist_element(port))
+                    add_new_device(port, tag);
+                else
+                    device_queue_mark_accessed(port);
             }
         }
     }
@@ -91,38 +103,124 @@ static int detection_routine(struct usb_device *dev, void *data)
     return 0;
 }
 
+static result_codes is_supported_device(struct usb_serial_port *port, uint8_t *tag)
+{
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+        if(supported_sensors[i].device_tester(port, tag) == RESULT_TRUE)
+            return RESULT_TRUE;
+
+    return RESULT_FALSE;
+}
+
+static void add_new_device(struct usb_serial_port *port, uint8_t tag)
+{
+    uint16_t id;
+    uint8_t devices_objects_count;
+    struct device** devices_objects;
+
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+    {
+        if(supported_sensors[i].tag != tag)
+            continue;
+        
+        id = supported_sensors[i].device_get_new_id();
+        devices_objects = supported_sensors[i].device_adder(supported_sensors[i].device_class, id, &devices_objects_count);
+
+        device_queue_add(port, tag, id, devices_objects, devices_objects_count);
+
+        pr_info("Device added: %s - %d\n", supported_sensors[i].name, id);
+
+        break;
+    }
+}
+
+static void remove_device(struct usb_serial_port *port, uint8_t tag)
+{
+    uint16_t id;
+    uint8_t devices_objects_count;
+    struct device** devices_objects;
+
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+    {
+        if(supported_sensors[i].tag != tag)
+            continue;
+
+        id = device_queue_get_id(port);
+        devices_objects_count = device_queue_get_devices_objects_count(port);
+        devices_objects = device_queue_get_devices_objects(port);
+
+        for (int j = 0; j < devices_objects_count; j++)
+            device_destroy(supported_sensors[i].device_class, devices_objects[j]->devt);
+
+        kfree(devices_objects);
+
+        device_queue_remove(port);
+
+        pr_info("Device removed: %s - %d\n", supported_sensors[i].name, id);
+
+        break;
+    }
+}
+
 static int usb_device_event(struct notifier_block *nb, unsigned long action, void *data)
 {
     struct usb_device *dev = (struct usb_device *)data;
+    struct usb_serial_port *port; 
 
-    if (action == USB_DEVICE_ADD)
-        detection_routine(dev, NULL);
+    if(action == USB_DEVICE_ADD)
+        scann_usb_device(dev, NULL);  
+    else if (action == USB_DEVICE_REMOVE)
+    {
+        usb_for_each_dev(NULL, scann_usb_device);
+
+        while((port = device_queue_get_first_unaccessed_port()) != NULL)
+            remove_device(port, device_queue_get_tag(port));
+
+        device_queue_desmark_all_accessed();
+    }
 
     return NOTIFY_OK;
 }
 
-static struct notifier_block usb_device_nb = {
-    .notifier_call = usb_device_event,
-};
-
 static int __init drv_init(void)
 {
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+    {
+        supported_sensors[i].device_class = class_create(THIS_MODULE, supported_sensors[i].name);
+
+        if (IS_ERR(supported_sensors[i].device_class))
+        {
+            printk(KERN_ALERT "Failed to create device class\n");
+            return PTR_ERR(supported_sensors[i].device_class);
+        }
+    }
+
     usb_register_notify(&usb_device_nb);
 
-    usb_for_each_dev(NULL, detection_routine);
+    usb_for_each_dev(NULL, scann_usb_device);
 
-    pr_info("Sensors serial module initialized\n");
+    pr_info("CP210x sensors interfacing module initialized\n");
     
     return 0;
 }
 
 static void __exit drv_exit(void)
 {
+    struct usb_serial_port *port;
+
     usb_unregister_notify(&usb_device_nb);
-    
-    device_queue_destroy();
-    
-    pr_info("Serial reader module exited\n");
+
+    while(!device_queue_is_empty())
+    {
+        port = device_queue_get_last_node_port();
+
+        remove_device(port, device_queue_get_tag(port));
+    }
+
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+        class_destroy(supported_sensors[i].device_class);
+        
+    pr_info("CP210x sensors interfacing module exited\n");
 }
 
 module_init(drv_init);

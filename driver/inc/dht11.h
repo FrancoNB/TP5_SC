@@ -5,6 +5,7 @@
 #include "device.h"
 
 #define DHT11_TAG 0x73
+#define DHT11_NAME "DHT11"
 
 typedef struct __attribute__((packed))
 {
@@ -16,6 +17,10 @@ typedef struct __attribute__((packed))
     uint8_t checksum;
 } dht11_data_t;
 
-result_codes is_dht11(struct usb_serial_port *port);
+result_codes device_is_dht11(struct usb_serial_port *port, uint8_t *tag);
+
+uint16_t device_dht11_get_new_id(void);
+
+struct device** device_add_dht11(struct class *device_class, uint16_t id, uint8_t *devices_objects_count);
 
 #endif // __DHT11_H__

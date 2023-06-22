@@ -3,8 +3,26 @@
 
 #include "common.h"
 
-void device_queue_add(struct usb_serial_port *port, uint8_t tag);
+int device_queue_is_empty(void);
+
+int device_queue_exist_element(struct usb_serial_port *port);
+
+void device_queue_add(struct usb_serial_port *port, uint8_t tag, uint16_t id, struct device** devices_objects, uint8_t devices_objects_count);
 void device_queue_remove(struct usb_serial_port *port);
-void device_queue_destroy(void);
+
+int device_queue_get_devices_objects_count(struct usb_serial_port *port);
+struct device** device_queue_get_devices_objects(struct usb_serial_port *port);
+uint16_t device_queue_get_id(struct usb_serial_port *port);
+uint8_t device_queue_get_tag(struct usb_serial_port *port);
+
+struct usb_serial_port* device_queue_get_last_node_port(void);
+
+struct usb_serial_port* device_queue_get_first_unaccessed_port(void);
+
+void device_queue_mark_accessed(struct usb_serial_port *port);
+void device_queue_desmark_accessed(struct usb_serial_port *port);
+void device_queue_desmark_all_accessed(void);
+
+
 
 #endif // __DEVICE_QUEUE_H__

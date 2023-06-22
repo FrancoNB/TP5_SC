@@ -7,6 +7,7 @@ namespace AppUtils
         public string? NumSensors { get; set; }
         public string? Sensors { get; set; }
     }
+    
     public class Utils
     {
         public static void UpdateArray(double value, List<double> data)

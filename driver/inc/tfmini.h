@@ -20,8 +20,12 @@ typedef struct __attribute__((packed))
 
 result_codes device_is_tfmini(struct usb_serial_port *port, uint8_t *tag);
 
-uint16_t device_tfmini_get_new_id(void);
+result_codes device_read_tfmini(struct usb_serial_port *port, const char* device_name, char* buffer);
 
 struct device** device_add_tfmini(struct class *device_class, uint16_t id, uint8_t *devices_objects_count);
+
+uint16_t device_tfmini_get_new_id(void);
+
+ssize_t device_read_required_size_tfmini(const char* device_name);
 
 #endif // __TFMINI_H__

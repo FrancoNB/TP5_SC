@@ -115,7 +115,9 @@ result_codes device_read(struct usb_serial_port *port, void* buffer, size_t buff
         bytes_remaining -= bytes_read;
     }
 
-    memcpy(buffer, transfer_buffer, buffer_size);
+    for (int i = 0; i < buffer_size; i++)
+        ((u8*)buffer)[i] = transfer_buffer[i];
+
     kfree(transfer_buffer);
     cp210x_close(port);
 

@@ -8,6 +8,7 @@ typedef struct node_t
     uint8_t devices_objects_count;
     struct usb_serial_port *port;
     struct device **devices_objects;
+    struct cdev **cdevs;
     struct node_t *next;
 } node_t;
 
@@ -74,7 +75,7 @@ int device_queue_exist_element(struct usb_serial_port *port)
     return get_node(port) != NULL;
 }
 
-void device_queue_add(struct usb_serial_port *port, uint8_t tag, uint16_t id, struct device** devices_objects, uint8_t devices_objects_count)
+void device_queue_add(struct usb_serial_port *port, uint8_t tag, uint16_t id, struct device** devices_objects, struct cdev **cdevs, uint8_t devices_objects_count)
 {
     node_t* new_node;
 
@@ -85,6 +86,7 @@ void device_queue_add(struct usb_serial_port *port, uint8_t tag, uint16_t id, st
     new_node->port = port;
     new_node->devices_objects = devices_objects;
     new_node->devices_objects_count = devices_objects_count;
+    new_node->cdevs = cdevs;
     new_node->id = id;
     new_node->next = NULL;
 
@@ -126,6 +128,16 @@ struct device** device_queue_get_devices_objects(struct usb_serial_port *port)
 
     if(n)
         return n->devices_objects;
+
+    return NULL;
+}
+
+struct cdev** device_queue_get_cdevs(struct usb_serial_port *port)
+{
+    node_t* n = get_node(port);
+
+    if(n)
+        return n->cdevs;
 
     return NULL;
 }
@@ -191,6 +203,18 @@ struct usb_serial_port* device_queue_get_first_unaccessed_port(void)
     for (it = first_node; it; it = it->next)
         if(!it->access_flag)
             return it->port;
+
+    return NULL;
+}
+
+struct usb_serial_port* device_queue_get_port_by_dev(dev_t dev)
+{
+    node_t* it;
+
+    for (it = first_node; it; it = it->next)
+        for(int i = 0; i < it->devices_objects_count; i++)
+            if(it->devices_objects[i]->devt == dev)
+                return it->port;
 
     return NULL;
 }

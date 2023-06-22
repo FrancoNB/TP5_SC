@@ -9,6 +9,8 @@
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/string.h>
+#include <linux/fs.h>
+#include <linux/uaccess.h>
 
 #define STRING_CONVERT_OFFSET 4
 

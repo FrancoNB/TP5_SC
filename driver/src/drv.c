@@ -14,9 +14,17 @@ static int scann_usb_device(struct usb_device *dev, void *data);
 static int usb_device_event(struct notifier_block *nb, unsigned long action, void *data);
 static void remove_device(struct usb_serial_port *port, uint8_t tag);
 static void add_new_device(struct usb_serial_port *port, uint8_t tag);
+static int sensor_open(struct inode *inode, struct file *file);
+static ssize_t sensor_read(struct file *file, char __user *buffer, size_t length, loff_t *offset);
 
 static struct notifier_block usb_device_nb = {
     .notifier_call = usb_device_event,
+};
+
+static struct file_operations device_fops = {
+    .owner = THIS_MODULE,
+    .read = sensor_read,
+    .open = sensor_open
 };
 
 struct sensors_t
@@ -26,6 +34,8 @@ struct sensors_t
     struct class *device_class;
     result_codes (*device_tester)(struct usb_serial_port*, uint8_t*);
     struct device** (*device_adder)(struct class*, uint16_t, uint8_t*);
+    result_codes (*device_reader)(struct usb_serial_port*, const char*, char*);
+    ssize_t (*device_read_required_size)(const char*);
     uint16_t (*device_get_new_id)(void);
 };
 
@@ -35,6 +45,8 @@ static struct sensors_t supported_sensors[SUPPORTED_DEVICES_COUNT] = {
         .tag = DHT11_TAG,
         .device_tester = device_is_dht11,
         .device_adder = device_add_dht11,
+        .device_reader = device_read_dht11,
+        .device_read_required_size = device_read_required_size_dht11,
         .device_get_new_id = device_dht11_get_new_id
     },
     {
@@ -42,9 +54,80 @@ static struct sensors_t supported_sensors[SUPPORTED_DEVICES_COUNT] = {
         .tag = TFMINI_TAG,
         .device_tester = device_is_tfmini,
         .device_adder = device_add_tfmini,
+        .device_reader = device_read_tfmini,
+        .device_read_required_size = device_read_required_size_tfmini,
         .device_get_new_id = device_tfmini_get_new_id
     }
 };
+
+static int sensor_open(struct inode *inode, struct file *file)
+{
+    struct usb_serial_port* port = device_queue_get_port_by_dev(inode->i_rdev);
+
+    if(!port)
+        return -ENODEV;
+
+    file->private_data = port;
+
+    return 0;
+}
+
+static ssize_t sensor_read(struct file *file, char __user *buffer, size_t length, loff_t *offset)
+{
+    struct usb_serial_port *port = file->private_data;
+    uint8_t tag = device_queue_get_tag(port);
+    ssize_t required_size;
+    result_codes result;
+    char* read_buffer;
+
+    if(*offset > 0)
+        return 0;
+
+    for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
+    {
+        if(supported_sensors[i].tag != tag)
+            continue;
+
+        required_size = supported_sensors[i].device_read_required_size(file->f_path.dentry->d_name.name);
+
+        if(required_size < 0)
+            return -EINVAL;
+
+        read_buffer = kmalloc(required_size, GFP_KERNEL);
+
+        if(!read_buffer)
+            return -ENOMEM;
+
+        result = supported_sensors[i].device_reader(port, file->f_path.dentry->d_name.name, read_buffer);
+
+        if(result == RESULT_OK)
+        {
+            if(copy_to_user(buffer, read_buffer, strlen(read_buffer) + 1))
+            {
+                kfree(read_buffer);
+                return -EFAULT;
+            }
+
+            (*offset) += strlen(read_buffer) + 1;
+
+            kfree(read_buffer);
+            
+            return strlen(read_buffer) + 1;
+        }
+        else if(result == RESULT_FALSE)
+        {
+            kfree(read_buffer);
+            return -EIO;
+        }
+        else
+        {
+            kfree(read_buffer);
+            return -EINVAL;
+        }
+    }
+
+    return -ENODEV;
+}
 
 static int scann_usb_device(struct usb_device *dev, void *data)
 {
@@ -117,6 +200,7 @@ static void add_new_device(struct usb_serial_port *port, uint8_t tag)
     uint16_t id;
     uint8_t devices_objects_count;
     struct device** devices_objects;
+    struct cdev** cdevs;
 
     for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
     {
@@ -125,11 +209,25 @@ static void add_new_device(struct usb_serial_port *port, uint8_t tag)
         
         id = supported_sensors[i].device_get_new_id();
         devices_objects = supported_sensors[i].device_adder(supported_sensors[i].device_class, id, &devices_objects_count);
+        
+        cdevs = kmalloc(devices_objects_count * sizeof(struct cdev*), GFP_KERNEL);
 
-        device_queue_add(port, tag, id, devices_objects, devices_objects_count);
+        for (int i = 0; i < devices_objects_count; i++)
+        {
+            cdevs[i] = kmalloc(sizeof(struct cdev), GFP_KERNEL);
+
+            cdev_init(cdevs[i], &device_fops);
+
+            cdevs[i]->owner = THIS_MODULE;
+            cdevs[i]->ops = &device_fops;
+
+            cdev_add(cdevs[i], devices_objects[i]->devt, 1);
+        }
+        
+        device_queue_add(port, tag, id, devices_objects, cdevs, devices_objects_count);
 
         pr_info("Device added: %s - %d\n", supported_sensors[i].name, id);
-
+        
         break;
     }
 }
@@ -138,7 +236,9 @@ static void remove_device(struct usb_serial_port *port, uint8_t tag)
 {
     uint16_t id;
     uint8_t devices_objects_count;
+    dev_t devt;
     struct device** devices_objects;
+    struct cdev** cdevs;
 
     for(int i = 0; i < SUPPORTED_DEVICES_COUNT; i++)
     {
@@ -148,11 +248,20 @@ static void remove_device(struct usb_serial_port *port, uint8_t tag)
         id = device_queue_get_id(port);
         devices_objects_count = device_queue_get_devices_objects_count(port);
         devices_objects = device_queue_get_devices_objects(port);
+        cdevs = device_queue_get_cdevs(port);
+        devt = devices_objects[0]->devt;
 
         for (int j = 0; j < devices_objects_count; j++)
+        {
+            cdev_del(cdevs[j]);
+            kfree(cdevs[j]);
             device_destroy(supported_sensors[i].device_class, devices_objects[j]->devt);
+        }
 
+        kfree(cdevs);
         kfree(devices_objects);
+
+        unregister_chrdev_region(devt, devices_objects_count);
 
         device_queue_remove(port);
 

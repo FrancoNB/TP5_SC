@@ -21,7 +21,11 @@ Finalmente, la aplicación cliente también se ejecuta a nivel usuario y se cone
 
 Para la realización de las aplicaciones se utilizo el lenguaje de programación C# para el cliente y C para el servidor y el modulo del kernel.
 
-Las pruebas se realizaron sobre una Raspberry Pi 4 con el sistema operativo Raspbian sin interfaz grafica y el kernel 6.1.21-v7+.
+Las pruebas se realizaron sobre una [Raspberry Pi 4](https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-datasheet.pdf) con el sistema operativo [Raspbian](https://www.raspbian.org/) sin interfaz grafica y el [kernel 6.1.21-v7+](https://www.kernel.org/).
+
+**Nota:** El [*DHT11*](https://www.mouser.com/datasheet/2/758/DHT11-Technical-Data-Sheet-Translated-Version-1143054.pdf) no posee una interfaz serie, por lo tanto se utilizo un [Arduino UNO](https://docs.arduino.cc/resources/datasheets/A000066-datasheet.pdf) para leer los datos del sensor y enviarlos por medio de un puerto serie virtual al [*CP210x*](https://www.sparkfun.com/datasheets/IC/cp2102.pdf) a modo de interfaz serie.
+
+![imgs](/imgs/WhatsApp%20Image%202023-06-23%20at%2019.09.41.jpeg)
 
 ## Compilación
 
@@ -29,6 +33,7 @@ Para compilar el proyecto lo primero es clonar el repositorio:
 
 ```bash
 $ git clone https://github.com/FrancoNB/TP5_SC.git
+$ git submodule update --init --recursive
 ```
 
 Con el repositorio ya clonado, se debe ingresar a la carpeta del proyecto:

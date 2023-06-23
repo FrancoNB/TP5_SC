@@ -9,6 +9,20 @@ Implementación de un modulo para el kernel de Linux que permite la lectura de s
 
 ### Grupo: **CLovers**
 
+## Resumen
+
+El proyecto consta de tres capas: el modulo del kernel, la aplicación servidor y la aplicación cliente.
+
+El modulo del kernel se encarga de mapear y dar soporte a los sensores conectados por medio de un puente usb-serial, generando dispositivos en el directorio `/dev` que son fáciles de leer en aplicaciones de nivel de usuario por medio de operaciones con ficheros. 
+
+El server corre a nivel de usuario sobre el dispositivo donde se encuentran conectados físicamente los sensores y hace uso del driver para obtener las lecturas de los mismos. Luego, expone las lecturas disponibles a través de un sockect ipv4 que permite el acceso a los datos de manera remota soportando múltiples clientes. 
+
+Finalmente, la aplicación cliente también se ejecuta a nivel usuario y se conecta a la aplicación servidor, obteniendo las mediciones y permitiendo al usuario visualizar los datos de los sensores en tiempo real y de manera sencilla.
+
+Para la realización de las aplicaciones se utilizo el lenguaje de programación C# para el cliente y C para el servidor y el modulo del kernel.
+
+Las pruebas se realizaron sobre una Raspberry Pi 4 con el sistema operativo Raspbian sin interfaz grafica y el kernel 6.1.21-v7+.
+
 ## Compilación
 
 Para compilar el proyecto lo primero es clonar el repositorio:
@@ -81,18 +95,84 @@ $ sudo ./bin/server
 Para compilar la aplicación cliente se debe acceder al directorio `/app` y ejecutar:
 
 ```bash
-
+$ cd app
+$ dotnet restore
+$ dotnet build --configuration Release
 ```
 
-## Funcionamiento general
+Como resultado obtenemos el directorio `/bin`. Para ejecutar la aplicación se debe ejecutar:
 
-El modulo del kernel se encarga de mapear y dar soporte a los sensores conectados por medio del puente usb-serial, generando dispositivos en el directorio `/dev` fáciles de leer en aplicaciones de nivel de usuario por medio de operaciones con ficheros. 
+```bash
+$ dotnet run --configuration Release
+```
 
-El server corre a nivel de usuario sobre el dispositivo donde se encuentran conectados físicamente los sensores y hace uso del driver para obtener las lecturas de los mismos. Luego, expone las lecturas disponibles a través de un sockect ipv4 que permite el acceso a los datos de manera remota y soporta múltiples conexiones. 
+o tambien:
 
-Finalmente, la aplicación cliente también se ejecuta a nivel usuario y se conecta a la aplicación servidor permitiendo al usuario visualizar los datos de los sensores en tiempo real y de manera sencilla.
+```bash
+$ ./bin/Release/net7.0/app
+```
+
+**Nota:** Para poder compilar la aplicación cliente es necesario tener instalado el SDK de .NET 7.0. En caso de no tenerlo, se puede instalar con el siguiente comando:
+
+```bash
+$ sudo apt-get install dotnet-sdk-7.0
+```
 
 ## Uso
+
+Una vez que tenemos todo compilado, podemos comenzar a utilizar el proyecto. Lo primero que debemos hacer es cargar el modulo del kernel en el dispositivo donde se encuentran conectados los sensores:
+
+```bash
+$ sudo insmod sensors_driver.ko
+```
+
+Para verificar que todo este bien ejecutamos el comando:
+
+```bash
+$ dmesg
+```
+
+Si todo salio bien, se deben haber detectado los sensores conectados al dispositivo y deberíamos verlos en los mensajes del kernel:
+
+![dmegs](/imgs/Captura%20desde%202023-06-23%2015-26-16.png)
+
+Luego, ejecutamos la aplicación servidor sobre el mismo dispositivo:
+
+```bash
+$ sudo ./server
+```
+
+Si todo salio bien, el servidor comienza a aceptar conexiones a través del puerto 5000 y deberíamos ver el siguiente mensaje:
+
+![server](/imgs/Captura%20desde%202023-06-23%2018-37-57.png)
+
+Desde esta interfaz se puede observar el trafico de datos entre el servidor y los clientes conectados.
+
+![server](/imgs/Captura%20desde%202023-06-23%2018-44-06.png)
+
+Con el server ya corriendo, podemos ejecutar la aplicación cliente en cualquier dispositivo con acceso por red al servidor:
+
+```bash
+$ dotnet run --configuration Release
+```
+
+En la primer pantalla de la aplicación se debe ingresar la dirección IP del servidor y el puerto donde se encuentra escuchando:
+
+![client](/imgs/Captura%20desde%202023-06-23%2018-46-01.png)
+
+![client](/imgs/Captura%20desde%202023-06-23%2018-46-08.png)
+
+Una vez conectados al servidor, se muestra el listado de los sensores disponibles y se puede seleccionar el sensor que se desea visualizar:
+
+![client](/imgs/Captura%20desde%202023-06-23%2018-49-22.png)
+
+Luego de seleccionar un sensor, se solicita al usuario ingresar el periodo de muestreo deseado:
+
+![client](/imgs/Captura%20desde%202023-06-23%2018-51-36.png)
+
+Finalmente, una vez ingresado el periodo de muestreo, se comienzan a graficar los datos en tiempo real:
+
+![client](/imgs/Captura%20desde%202023-06-23%2018-18-36.png)
 
 ## Licencia
 

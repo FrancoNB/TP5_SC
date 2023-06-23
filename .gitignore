@@ -1,7 +1,6 @@
 .vscode
 /app/bin
 /app/obj
-/app/app.csproj
 /app/app.sln
 /server/bin
 /server/CMakeFiles

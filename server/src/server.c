@@ -34,11 +34,16 @@ char* response_handler(char* request)
 {
     char* result = NULL;
 
-    size_t size = (size_t)snprintf(NULL, 0, "%s", request);
+    if(strcmp(request, "GET LIST") == 0)
+        result = get_sensors_list();
+    else if(strstr(request, "GET DATA "))
+        result = get_sensor_read(strstr(request, "GET DATA ") + strlen("GET DATA "));
+    else
+    {
+        result = calloc(strlen("{error:\"Invalid request\",type:\"\",content:\"\"}") + 1, sizeof(char));
 
-    result = calloc(size + 1, sizeof(char));
-
-    snprintf(result, size + 1, "%s", request);
+        strcpy(result, "{error:\"Invalid request\",type:\"\",content:\"\"}");
+    }
 
     return result;
 }
@@ -82,7 +87,7 @@ void *connection_handler(void *args)
                     fprintf(stderr, KRED"\nError receiving data from client (FD: %d) \n"KDEF, client_fd);
                 else
                 {
-                    printf(KYEL"\nRecibe [%ld B] (FD: %d)\n"KDEF, bytes_received, client_fd);
+                    printf(KYEL"\nRecibe [%d B] (FD: %d)\n"KDEF, bytes_received, client_fd);
                     printf(KYEL"\nData: %s\n"KDEF, data);
 
                     result = response_handler(data);
@@ -99,7 +104,7 @@ void *connection_handler(void *args)
                         fprintf(stderr, KRED"\nError sending data to client (FD: %d) \n"KDEF, client_fd);
                     else
                     {
-                        printf(KCYN"\nSend [%ld B] (FD: %d)\n"KDEF, bytes_sent, client_fd);
+                        printf(KCYN"\nSend [%d B] (FD: %d)\n"KDEF, bytes_sent, client_fd);
                         printf(KCYN"\nData: %s\n"KDEF, result);
                     }
 

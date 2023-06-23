@@ -18,8 +18,8 @@
 #include <stdint.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 
-// Define colors codes for terminal
 #ifndef TERMINAL_TEXT_COLORS
 #define TERMINAL_TEXT_COLORS
     #define KDEF  "\x1B[0m"     // Default
@@ -32,31 +32,10 @@
     #define KWHT  "\x1B[37m"    // White
 #endif
 
-// Define ASCII characters for general use
-#ifndef ASCII_CHARACTERS
-#define ASCII_CHARACTERS
-    #define ASCII_END_OF_STRING 0       // '\0'
-    #define ASCII_MONEY_SIGN    36      // '$'
-    #define ASCII_MIDDLE_DASH   45      // '-'
-    #define ASCII_SPACE         32      // ' '
-    #define ASCII_LINE_BREAK    10      // '\n'
-    #define ASCII_AMPERSAND     38      // '&' 
-    #define ASCII_PLECA         124     // '|' 
-    #define ASCII_PERCENT       37      // '%'  
-    #define ASCII_GREATER_THAN  62      // '>'  
-    #define ASCII_LESS_THAN     60      // '<'  
-#endif
-
-// Define macro to unused variables
 #define UNUSED(x) (void)(x)
 
-// Define IPV4 socket port
 #define IPV4_SOCKET_PORT 5000
 
-/**
- * @brief Error codes for communication functions
- * 
- */
 typedef enum 
 {
     SUCCESS = 0,                    // Success

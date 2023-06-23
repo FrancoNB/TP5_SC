@@ -1,17 +1,47 @@
 #include "threads_handle.h"
 
-/**
- * @brief Handle thread node
- * 
- */
 struct th_node
 {
-    pthread_t tid;          // Thread id
-    struct th_node *next;   // Next handle thread
+    pthread_t tid;        
+    struct th_node *next;
 };
 
-// First handle thread
 struct th_node *first_handler = NULL;
+
+struct th_node* handler_get_last(void) 
+{
+    struct th_node* last_th = first_handler;
+
+    if(!last_th)
+        return NULL;
+    
+    while (last_th->next)
+        last_th = last_th->next;
+
+    return last_th;
+}
+
+struct th_node* handler_get_by_tid(pthread_t tid)
+{
+    for (struct th_node* th = first_handler; th; th = th->next) 
+        if (th->tid == tid) 
+            return th;
+
+    return NULL;
+}
+
+struct th_node* handler_get_parent(struct th_node* th)
+{
+    struct th_node *parent = first_handler;
+
+    if(!parent || th == parent)
+        return NULL;
+
+    while (parent->next != th)
+        parent = parent->next;
+    
+    return parent;
+}
 
 pthread_t* handler_create(void)
 {
@@ -60,41 +90,6 @@ void handler_destroy_all(void)
         it = it->next;
         free(aux);
     }
-}
-
-struct th_node* handler_get_last(void) 
-{
-    struct th_node* last_th = first_handler;
-
-    if(!last_th)
-        return NULL;
-    
-    while (last_th->next)
-        last_th = last_th->next;
-
-    return last_th;
-}
-
-struct th_node* handler_get_by_tid(pthread_t tid)
-{
-    for (struct th_node* th = first_handler; th; th = th->next) 
-        if (th->tid == tid) 
-            return th;
-
-    return NULL;
-}
-
-struct th_node* handler_get_parent(struct th_node* th)
-{
-    struct th_node *parent = first_handler;
-
-    if(!parent || th == parent)
-        return NULL;
-
-    while (parent->next != th)
-        parent = parent->next;
-    
-    return parent;
 }
 
 void handler_wait_all(void)
